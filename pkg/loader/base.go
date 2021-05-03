@@ -38,6 +38,9 @@ const (
 	// Cfn means that regula will only look for CloudFormation template files in given
 	// directories and it will assume that given files are CloudFormation YAML or JSON.
 	Cfn
+	// TfDir means that regula will load the HCL in the directory in a similar
+	// way to terraform plan.
+	TfDir
 )
 
 // InputTypeIDs maps the InputType enums to string values that can be specified in
@@ -46,6 +49,7 @@ var InputTypeIDs = map[InputType][]string{
 	Auto:   {"auto"},
 	TfPlan: {"tf-plan"},
 	Cfn:    {"cfn"},
+	TfDir:  {"tf-dir"},
 }
 
 // InputTypeForString is a utility function to translate the string name of an input
@@ -58,6 +62,8 @@ func InputTypeForString(typeStr string) (InputType, error) {
 		return Cfn, nil
 	case "tf-plan":
 		return TfPlan, nil
+	case "tf-dir":
+		return TfDir, nil
 	default:
 		return -1, fmt.Errorf("Unrecognized input type %v", typeStr)
 	}

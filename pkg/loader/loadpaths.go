@@ -182,11 +182,14 @@ func DetectorByInputType(inputType InputType) (ConfigurationDetector, error) {
 		return NewAutoDetector(
 			&CfnDetector{},
 			&TfPlanDetector{},
+			&TfDirDetector{},
 		), nil
 	case Cfn:
 		return &CfnDetector{}, nil
 	case TfPlan:
 		return &TfPlanDetector{}, nil
+	case TfDir:
+		return &TfDirDetector{}, nil
 	default:
 		return nil, fmt.Errorf("Unsupported input type: %v", inputType)
 	}
