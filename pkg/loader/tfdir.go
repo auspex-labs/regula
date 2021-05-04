@@ -41,6 +41,8 @@ func (t *TfDirDetector) DetectDirectory(i InputDirectory, opts DetectOptions) (I
 	}
 
 	configuration := new(HclConfiguration)
+	configuration.path = i.Path()
+
 	parser := configs.NewParser(nil)
 	var diags hcl.Diagnostics
 	configuration.module, diags = parser.LoadConfigDir(i.Path())
@@ -53,6 +55,7 @@ func (t *TfDirDetector) DetectDirectory(i InputDirectory, opts DetectOptions) (I
 }
 
 type HclConfiguration struct {
+	path    string
 	module  *configs.Module
 	schemas tf_resource_schemas.ResourceSchemas
 }
@@ -67,11 +70,15 @@ func (c *HclConfiguration) Location(attributePath []string) (*Location, error) {
 }
 
 func (c *HclConfiguration) RegulaInput() RegulaInput {
-	return c.RenderResourceView()
+	return RegulaInput{
+		"filepath": c.path,
+		"content":  c.RenderResourceView(),
+	}
 }
 
 func (c *HclConfiguration) RenderResourceView() map[string]interface{} {
 	resourceView := make(map[string]interface{})
+	resourceView["hcl_resource_view_version"] = "0.0.1"
 
 	resources := make(map[string]interface{})
 	resourceView["resources"] = resources
@@ -92,6 +99,7 @@ func (c *HclConfiguration) RenderResource(
 	schema := c.schemas[resource.Type]
 	properties := make(map[string]interface{})
 	properties["_type"] = resource.Type
+	properties["_provider"] = resource.Provider.ForDisplay()
 	properties["id"] = resourceId
 
 	body, ok := resource.Config.(*hclsyntax.Body)
