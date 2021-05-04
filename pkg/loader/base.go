@@ -95,6 +95,7 @@ type IACConfiguration interface {
 	// LoadedFiles are all of the files contained within this configuration.
 	LoadedFiles() []string
 	// Location resolves an attribute path to to a file, line and column.
+	// The first element of the attributePath is usually the resource ID.
 	Location(attributePath []string) (*Location, error)
 }
 
