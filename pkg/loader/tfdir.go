@@ -135,7 +135,7 @@ func (c *HclConfiguration) RenderBody(
 
 	renderedBlocks := make(map[string][]interface{})
 	for _, block := range body.Blocks {
-		if _, ok := properties[block.Type]; !ok {
+		if _, ok := renderedBlocks[block.Type]; !ok {
 			renderedBlocks[block.Type] = make([]interface{}, 0)
 		}
 		entry := c.RenderBlock(
