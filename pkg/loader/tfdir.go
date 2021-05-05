@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -168,17 +169,17 @@ func (c *HclConfiguration) RenderBlock(
 	return c.RenderBody(block.Body, schema)
 }
 
-func (c *HclConfiguration) IsResource(id string) bool {
-	if _, ok := c.module.ManagedResources[id]; ok {
-		return true
+func (c *HclConfiguration) GetResource(id string) (*configs.Resource, bool) {
+	if r, ok := c.module.ManagedResources[id]; ok {
+		return r, true
 	}
-	if _, ok := c.module.DataResources[id]; ok {
-		return true
+	if r, ok := c.module.DataResources[id]; ok {
+		return r, true
 	}
-	return false
+	return nil, false
 }
 
-func (c *HclConfiguration) ResolveResourceReference(traversal hcl.Traversal) *string {
+func (c *HclConfiguration) ResolveResourceReference(traversal hcl.Traversal) interface{} {
 	parts := c.RenderTraversal(traversal)
 	if len(parts) < 1 {
 		return nil
@@ -189,8 +190,19 @@ func (c *HclConfiguration) ResolveResourceReference(traversal hcl.Traversal) *st
 	}
 
 	resourceId := strings.Join(parts[:idx], ".")
-	if c.IsResource(resourceId) {
-		return &resourceId
+	if resource, ok := c.GetResource(resourceId); ok {
+		resourceNode := TfNode{Object: resource.Config, Range: resource.DeclRange}
+		if node, err := resourceNode.GetDescendant(parts[idx:]); err == nil {
+			// TODO: non-attribute cases.
+			if node.Attribute != nil {
+				expr := node.Attribute.Expr
+				if e, ok := expr.(hclsyntax.Expression); ok {
+					return c.RenderExpr(e, nil)
+				}
+			}
+		}
+
+		return resourceId
 	}
 	return nil
 }
@@ -198,11 +210,11 @@ func (c *HclConfiguration) ResolveResourceReference(traversal hcl.Traversal) *st
 // This returns a string or array of references.
 // TODO: limit this to resource references?
 func (c *HclConfiguration) ExpressionReferences(expr hclsyntax.Expression) interface{} {
-	references := make([]string, 0)
+	references := make([]interface{}, 0)
 	for _, traversal := range expr.Variables() {
 		resolved := c.ResolveResourceReference(traversal)
 		if resolved != nil {
-			references = append(references, *resolved)
+			references = append(references, resolved)
 		}
 	}
 	if len(references) == 0 {
@@ -229,6 +241,10 @@ func (c *HclConfiguration) RenderExpr(
 			return strings.Join(c.RenderTraversal(e.Traversal), ".")
 		}
 	case *hclsyntax.TemplateExpr:
+		if len(e.Parts) == 1 {
+			return c.RenderExpr(e.Parts[0], schema)
+		}
+
 		// This is commonly used to refer to resources, so we pick out the
 		// references.
 		refs := c.ExpressionReferences(e)
@@ -258,6 +274,12 @@ func (c *HclConfiguration) RenderExpr(
 	fmt.Printf("warning: unhandled expression type %s\n", reflect.TypeOf(expr).String())
 
 	// Fall back to normal eval.
+	return c.EvaluateExpr(expr, schema)
+}
+
+func (c *HclConfiguration) EvaluateExpr(
+	expr hcl.Expression, schema *tf_resource_schemas.Schema,
+) interface{} {
 	ctx := hcl.EvalContext{}
 	val, _ := expr.Value(&ctx)
 	return c.RenderValue(val, schema)
@@ -308,4 +330,88 @@ func (c *HclConfiguration) RenderValue(
 
 	fmt.Printf("Unknown type: %v\n", val.Type().GoString())
 	return nil
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// utilities for traversing to a path in a HCL tree somewhat generically
+
+// A `TfNode` represents a syntax tree in the HCL config.
+type TfNode struct {
+	// Exactly one of the next three fields will be set.
+	Object    hcl.Body
+	Array     hcl.Blocks
+	Attribute *hcl.Attribute
+
+	// This will always be set.
+	Range hcl.Range
+}
+
+func (node *TfNode) GetChild(key string) (*TfNode, error) {
+	child := TfNode{}
+
+	if node.Object != nil {
+		bodyContent, _, diags := node.Object.PartialContent(&hcl.BodySchema{
+			Attributes: []hcl.AttributeSchema{
+				{
+					Name:     key,
+					Required: false,
+				},
+			},
+			Blocks: []hcl.BlockHeaderSchema{
+				{
+					Type: key,
+				},
+			},
+		})
+		if diags.HasErrors() {
+			return nil, fmt.Errorf(diags.Error())
+		}
+
+		blocks := bodyContent.Blocks.OfType(key)
+		if len(blocks) > 0 {
+			child.Array = blocks
+			child.Range = blocks[0].DefRange
+		}
+
+		if attribute, ok := bodyContent.Attributes[key]; ok {
+			child.Attribute = attribute
+			child.Range = attribute.Range
+		}
+	} else if node.Array != nil {
+		index, err := strconv.Atoi(key)
+		if err != nil {
+			return nil, err
+		} else {
+			if index < 0 || index >= len(node.Array) {
+				return nil, fmt.Errorf("TfNode.Get: out of bounds: %d", index)
+			}
+
+			child.Object = node.Array[index].Body
+			child.Range = node.Array[index].DefRange
+		}
+	}
+
+	return &child, nil
+}
+
+func (node *TfNode) GetDescendant(path []string) (*TfNode, error) {
+	if len(path) == 0 {
+		return node, nil
+	}
+
+	child, err := node.GetChild(path[0])
+	if err != nil {
+		return nil, err
+	}
+
+	return child.GetDescendant(path[1:])
+}
+
+func (node *TfNode) Location() string {
+	return fmt.Sprintf(
+		"%s:%d:%d",
+		node.Range.Filename,
+		node.Range.Start.Line,
+		node.Range.Start.Column,
+	)
 }
