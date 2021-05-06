@@ -227,6 +227,16 @@ func (c *HclConfiguration) ExpressionReferences(expr hclsyntax.Expression) inter
 	}
 }
 
+// Auxiliary function to determine if the expression should be ignored from
+// sets, lists, etc.
+func voidExpression(expr hclsyntax.Expression) bool {
+	switch e := expr.(type) {
+	case *hclsyntax.TemplateExpr:
+		return len(e.Parts) == 0
+	}
+	return false
+}
+
 func (c *HclConfiguration) RenderExpr(
 	expr hclsyntax.Expression, schema *tf_resource_schemas.Schema,
 ) interface{} {
@@ -267,7 +277,9 @@ func (c *HclConfiguration) RenderExpr(
 		arr := make([]interface{}, 0)
 		elemSchema := tf_resource_schemas.GetElem(schema)
 		for _, elem := range e.Exprs {
-			arr = append(arr, c.RenderExpr(elem, elemSchema))
+			if !voidExpression(elem) {
+				arr = append(arr, c.RenderExpr(elem, elemSchema))
+			}
 		}
 		return arr
 	}
