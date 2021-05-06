@@ -16,6 +16,7 @@ package loader
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -271,7 +272,7 @@ func (c *HclConfiguration) RenderExpr(
 		return arr
 	}
 
-	fmt.Printf("warning: unhandled expression type %s\n", reflect.TypeOf(expr).String())
+	fmt.Fprintf(os.Stderr, "warning: unhandled expression type %s\n", reflect.TypeOf(expr).String())
 
 	// Fall back to normal eval.
 	return c.EvaluateExpr(expr, schema)
@@ -309,7 +310,14 @@ func (c *HclConfiguration) RenderValue(
 	if val.Type() == cty.Bool {
 		return val.True()
 	} else if val.Type() == cty.Number {
-		return val.AsBigFloat()
+		b := val.AsBigFloat()
+		if b.IsInt() {
+			i, _ := b.Int64()
+			return i
+		} else {
+			f, _ := b.Float64()
+			return f
+		}
 	} else if val.Type() == cty.String {
 		return val.AsString()
 	} else if val.Type().IsTupleType() || val.Type().IsSetType() || val.Type().IsListType() {
@@ -328,7 +336,7 @@ func (c *HclConfiguration) RenderValue(
 		return object
 	}
 
-	fmt.Printf("Unknown type: %v\n", val.Type().GoString())
+	fmt.Fprintf(os.Stderr, "Unknown type: %v\n", val.Type().GoString())
 	return nil
 }
 
