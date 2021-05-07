@@ -49,6 +49,11 @@ func (t *TfDirDetector) DetectDirectory(i InputDirectory, opts DetectOptions) (I
 	var diags hcl.Diagnostics
 	configuration.module, diags = parser.LoadConfigDir(i.Path())
 	if diags.HasErrors() {
+		fmt.Fprintf(os.Stderr, "%s\n", diags.Error())
+	}
+	if configuration.module == nil {
+		// Only actually throw an error if we don't have a module.  We can
+		// still try and validate what we can.
 		return nil, fmt.Errorf(diags.Error())
 	}
 
