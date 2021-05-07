@@ -28,7 +28,7 @@ func NewShowCommand() *cobra.Command {
 		Use:   "show [item]",
 		Short: "Show debug information.",
 		Long: `Show debug information.  Currently the available items are:
-  regula-input [file..]   Show the JSON input being passed to regula`,
+  input [file..]   Show the JSON input being passed to regula`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) < 1 {
 				fmt.Fprintf(os.Stderr, "Expected an item to show\n")
@@ -36,7 +36,7 @@ func NewShowCommand() *cobra.Command {
 			}
 
 			switch args[0] {
-			case "regula-input":
+			case "input":
 				paths := args[1:]
 				loadedFiles, err := loader.LoadPaths(loader.LoadPathsOptions{
 					Paths: paths,
