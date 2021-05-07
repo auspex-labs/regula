@@ -282,6 +282,25 @@ func (c *HclConfiguration) RenderExpr(
 			}
 		}
 		return arr
+	case *hclsyntax.ObjectConsExpr:
+		object := make(map[string]interface{})
+		for _, item := range e.Items {
+			key := c.RenderExpr(item.KeyExpr, nil)   // Or pass string schema?
+			val := c.RenderExpr(item.ValueExpr, nil) // Or get elem schema?
+			if str, ok := key.(string); ok {
+				object[str] = val
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: non-string key: %s\n", reflect.TypeOf(key).String())
+			}
+		}
+		return object
+	case *hclsyntax.ObjectConsKeyExpr:
+		// Keywords are interpreted as keys.
+		if key := hcl.ExprAsKeyword(e); key != "" {
+			return key
+		} else {
+			return c.RenderExpr(e.Wrapped, schema)
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "warning: unhandled expression type %s\n", reflect.TypeOf(expr).String())
