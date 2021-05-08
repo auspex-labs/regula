@@ -195,6 +195,15 @@ func (c *HclConfiguration) ResolveResourceReference(traversal hcl.Traversal) int
 		idx = 3
 	}
 
+	if len(parts) > 2 && parts[0] == "random_string" {
+    	// Random strings are occasionally used to name resource, e.g.:
+    	// "server-${random_string.foo.result}".  By not resolving these,
+    	// we get something like "server-random_string.foo.result" which
+    	// usually doesn't conform to naming constraints but it's unique
+    	// enough to make most validations work.
+    	return nil
+	}
+
 	resourceId := strings.Join(parts[:idx], ".")
 	if resource, ok := c.GetResource(resourceId); ok {
 		resourceNode := TfNode{Object: resource.Config, Range: resource.DeclRange}
