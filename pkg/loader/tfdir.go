@@ -151,10 +151,13 @@ func (c *HclConfiguration) RenderBody(
 		if _, ok := renderedBlocks[block.Type]; !ok {
 			renderedBlocks[block.Type] = make([]interface{}, 0)
 		}
-		entry := c.RenderBlock(
-			block,
-			tf_resource_schemas.GetAttribute(schema, block.Type),
-		)
+
+		childSchema := tf_resource_schemas.GetAttribute(schema, block.Type)
+		if s := tf_resource_schemas.GetElem(childSchema); s != nil {
+			childSchema = s
+		}
+
+		entry := c.RenderBlock(block, childSchema)
 		renderedBlocks[block.Type] = append(renderedBlocks[block.Type], entry)
 	}
 	for key, renderedBlock := range renderedBlocks {
@@ -306,7 +309,7 @@ func (c *HclConfiguration) RenderExpr(
 	case *hclsyntax.ObjectConsExpr:
 		object := make(map[string]interface{})
 		for _, item := range e.Items {
-			key := c.RenderExpr(item.KeyExpr, nil)   // Or pass string schema?
+			key := c.RenderExpr(item.KeyExpr, nil) // Or pass string schema?
 			val := c.RenderExpr(item.ValueExpr, nil) // Or get elem schema?
 			if str, ok := key.(string); ok {
 				object[str] = val
