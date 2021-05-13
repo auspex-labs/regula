@@ -47,6 +47,15 @@ func (t *TfDirDetector) DetectDirectory(i InputDirectory, opts DetectOptions) (I
 
 	parser := configs.NewParser(nil)
 	var diags hcl.Diagnostics
+
+	primary, override, diags := parser.ConfigDirFiles(i.Path())
+	if diags.HasErrors() {
+		return nil, diags
+	}
+	configuration.files = []string{}
+	configuration.files = append(configuration.files, primary...)
+	configuration.files = append(configuration.files, override...)
+
 	configuration.module, diags = parser.LoadConfigDir(i.Path())
 	if diags.HasErrors() {
 		fmt.Fprintf(os.Stderr, "%s\n", diags.Error())
@@ -63,13 +72,13 @@ func (t *TfDirDetector) DetectDirectory(i InputDirectory, opts DetectOptions) (I
 
 type HclConfiguration struct {
 	path    string
+	files   []string
 	module  *configs.Module
 	schemas tf_resource_schemas.ResourceSchemas
 }
 
 func (c *HclConfiguration) LoadedFiles() []string {
-	// TODO
-	return []string{}
+	return c.files
 }
 
 func (c *HclConfiguration) Location(attributePath []string) (*Location, error) {
@@ -95,6 +104,14 @@ func (c *HclConfiguration) RenderResourceView() map[string]interface{} {
 	}
 	for resourceId, resource := range c.module.DataResources {
 		resources[resourceId] = c.RenderResource(resourceId, resource)
+	}
+
+	for key, moduleCall := range c.module.ModuleCalls {
+		fmt.Fprintf(os.Stderr, "Key: %s\n", key)
+		body, ok := moduleCall.Config.(*hclsyntax.Body)
+		if ok {
+			resources[key] = c.RenderBody(body, nil)
+		}
 	}
 
 	return resourceView
@@ -309,7 +326,7 @@ func (c *HclConfiguration) RenderExpr(
 	case *hclsyntax.ObjectConsExpr:
 		object := make(map[string]interface{})
 		for _, item := range e.Items {
-			key := c.RenderExpr(item.KeyExpr, nil) // Or pass string schema?
+			key := c.RenderExpr(item.KeyExpr, nil)   // Or pass string schema?
 			val := c.RenderExpr(item.ValueExpr, nil) // Or get elem schema?
 			if str, ok := key.(string); ok {
 				object[str] = val
