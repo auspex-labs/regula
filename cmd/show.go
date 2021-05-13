@@ -21,9 +21,12 @@ import (
 
 	"github.com/fugue/regula/pkg/loader"
 	"github.com/spf13/cobra"
+	"github.com/thediveo/enumflag"
 )
 
 func NewShowCommand() *cobra.Command {
+	var inputType loader.InputType
+
 	cmd := &cobra.Command{
 		Use:   "show [item]",
 		Short: "Show debug information.",
@@ -39,7 +42,8 @@ func NewShowCommand() *cobra.Command {
 			case "input":
 				paths := args[1:]
 				loadedFiles, err := loader.LoadPaths(loader.LoadPathsOptions{
-					Paths: paths,
+					Paths:     paths,
+					InputType: inputType,
 				})
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -59,6 +63,11 @@ func NewShowCommand() *cobra.Command {
 			}
 		},
 	}
+
+	cmd.Flags().VarP(
+		enumflag.New(&inputType, "input-type", loader.InputTypeIDs, enumflag.EnumCaseInsensitive),
+		"input-type", "t",
+		"Set the input type for the given paths")
 
 	return cmd
 }
